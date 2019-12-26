@@ -15,7 +15,6 @@ import cv2
 def binarizeImg(thresh, baseImg, basePix): 
   newImg = Image.new('L', (baseImg.width, baseImg.height)) # make a copy as to not change our original image
   newPix = newImg.load()
-  npArray = np.asarray(newImg)
   for i in range(baseImg.width):
     for j in range(baseImg.height):
       newPix[i, j] = basePix[i, j] # copy our image
@@ -81,6 +80,18 @@ def rotateImage(image, angle):
   result = cv2.warpAffine(image, rotationMatrix, image.shape[1::-1], flags=cv2.INTER_LINEAR)
   return result
 
+# reverses the colors of a binary image
+def inverseImage(arr):
+  #return np.invert(arr)
+  for i in range(len(arr)):
+    for j in range(len(arr[i])):
+      if arr[i, j] == 0:
+        arr[i, j] = 1
+      else:
+        arr[i, j] = 0
+  return arr
+
+
 def detectBarCode(origImg, binImg):
   # finds all of the contours of the image of all detected shapes
   contours, _ = cv2.findContours(binImg,1,2)
@@ -124,32 +135,53 @@ def drawBoundingBox(image, contours, points):
 
   cv2.drawContours(contImage, contours, -1, (255, 0, 0), 2)
   print("DETECTED CONTOURS")
-  plt.imshow(contImage)
-  plt.show()
+  saveArrayAsImage("contours.jpg", contImage)
   
   cv2.rectangle(rectImage, (points[0], points[1]), (points[2], points[3]), (255, 0, 0), 3)
   print("DETECTED BARCODE REGION")
-  plt.imshow(rectImage)
-  plt.show()
+  saveArrayAsImage("region.jpg", rectImage * 255)
+
+def saveArrayAsImage(filename, array):
+  arrayAsImg = Image.fromarray(array)
+  arrayAsImg.save('./results/' + filename)
+
+# takes in a numpy array representation of an image and attempts to analyze the barcode
+def analyzeBarCode(image):
+  middle = len(image) // 2
+  values = [] # used to store the perceived numerical value of the barcodes
+  count = 0
+  currentBar = 0
+  for pixel in range(len(image[middle])):
+    pixelVal = image[middle][pixel]
+    if pixel == 0: # if this is the first iteration
+      currentBar = pixelVal
+    else:
+      if pixelVal == currentBar:
+        count += 1
+      else:
+        currentBar = pixelVal
+        values.append(count)
+        count = 0
+
+  return values
+    
 
 #### BEGIN MAIN ####
 
 # load the barcode
-imOrig = Image.open('barcode.jpg')
+imOrig = Image.open('barcod.jpg')
 im = imOrig.convert('L') # convert to grayscale
-
-print("Original image in grayscale for comparison:")
-plt.imshow(im, cmap="gray")
-plt.show()
+im.save("./results/original.jpg")
 
 erosionFactor = 0 # will change based on whether it is a photo or digital scan
 # if image is not a digital scan of a barcode, meaning it is probably a photo, perform some cleanup.
 if not imgIsGood(im, 50):
   print("This image seems to be a photo of a barcode, attempting to clean up and binarize.")
-  im = adjustBrightness(im, -30) # increasing brightness seems to make fabrizzio's picture worse
-  im = adjustContrast(im, -100)
+  im = adjustBrightness(im, -40) # increasing brightness seems to make fabrizzio's picture worse
+  #im = adjustContrast(im, -100)
   #im = smoothImage(im)
   im = sharpenImage(im)
+  saveArrayAsImage("enhanced.jpg", np.asarray(im))
   erosionFactor = 6
 else:
   print("Image seems to be a digital scan. Going to binarize without cleaning up")
@@ -161,24 +193,19 @@ im = binarizeImg(127, im, im.load())
 # store im as a numpy array, makes it easier to perform operations
 npBin = np.asarray(im)
 # attempt to draw and crop the image to where the barcode is
-npBin = detectBarCode(imOrig, npBin)
+npBin = detectBarCode(im, npBin)
 
 # build a convolution kernel, and use it to generate the difference between the image and its eroded version
 kernel = np.ones((erosionFactor, erosionFactor),np.uint8)
 erosion = cv2.erode(npBin, kernel)
-print("BINARY")
-plt.imshow(npBin, cmap='gray', vmin=0,vmax=1)
-plt.show()
-print("EROSION")
-plt.imshow(erosion, cmap='gray', vmin=0,vmax=1)
-plt.show()
 
 difference = npBin - erosion # use erosion for edge detection
 
 ## Save our final image to be used for analysis
-imNewFromArray = Image.fromarray(difference)
-imNewFromArray.save('test.png')
 
-print("FINAL EDGE DETECTION IMAGE USED FOR ANALYSIS (Binary - Erosion)")
-plt.imshow(difference, cmap='gray', vmin=0,vmax=1)
-plt.show()
+difference = inverseImage(difference)
+
+saveArrayAsImage("final.jpg", difference * 255)
+
+data = analyzeBarCode(difference)
+print(data)
