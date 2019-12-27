@@ -4,6 +4,7 @@ from PIL import Image, ImageFilter, ImageEnhance
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+from collections import Counter
 
 # General Approach and Methods:
 ## Binarize the image, increase / decrease contrast, increase / decrease brightness
@@ -145,6 +146,42 @@ def saveArrayAsImage(filename, array):
   arrayAsImg = Image.fromarray(array)
   arrayAsImg.save('./results/' + filename)
 
+# from: https://stackoverflow.com/questions/1157106/remove-all-occurrences-of-a-value-from-a-list
+def remove_values_from_list(the_list, val):
+   return [value for value in the_list if value != val]
+
+def get_four_most_common_list_values(my_list):
+  most_common = Counter(my_list)
+  most_common = most_common.most_common(4)
+  to_return = []
+  for i in most_common:
+    to_return.append(i[0])
+  return to_return
+
+def convert_common_to_widths(my_list, most_common):
+  new_list = []
+  for item in range(len(my_list)):
+    for common in range(len(most_common)):
+      if my_list[item] == most_common[common]:
+        new_list.append(common + 1) # bar width values can be 1, 2, 3, 4. 
+  return new_list
+
+# follows the standard of 4 bar width values equaling one bar code digit. Sets this idea up.
+def convert_widths_to_tuple(widths):
+  tuple_list = []
+  single_item = []
+  counter = 0
+  print(len(widths))
+  for item in range(len(widths)):
+    if item == counter + 4:
+      tuple_list.append(single_item)
+      single_item = []
+      counter = item + 1
+    else:
+      single_item.append(widths[item])
+
+  return tuple_list
+
 # takes in a numpy array representation of an image and attempts to analyze the barcode
 def analyzeBarCode(image):
   middle = len(image) // 2
@@ -162,6 +199,18 @@ def analyzeBarCode(image):
         currentBar = pixelVal
         values.append(count)
         count = 0
+
+  #values = remove_values_from_list(values, 0)  
+  common = get_four_most_common_list_values(values)
+  print("common:", common)
+  only_most_common = []
+  #for ctr in range(len(values)):
+   # if values[ctr] in common:
+    #  only_most_common.append(values[ctr])
+
+  widths = convert_common_to_widths(values, common)
+  tuples = convert_widths_to_tuple(widths)
+  print("tuples:", tuples)
 
   return values
     
@@ -208,4 +257,4 @@ difference = inverseImage(difference)
 saveArrayAsImage("final.jpg", difference * 255)
 
 data = analyzeBarCode(difference)
-print(data)
+print("data:", data)
