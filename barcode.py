@@ -182,6 +182,43 @@ def convert_widths_to_tuple(widths):
 
   return tuple_list
 
+# Uses the barcode values seen here: https://www.wikihow.com/Read-12-Digit-UPC-Barcodes
+# converts the width values taken in the image and assign a numeric value
+# uses the margin of error to assign a value even if a width value is slightly off
+def assign_values_to_widths(widths, margin):
+  actual_values = []
+  width_values =	{
+    3211: 0,
+    2221: 1,
+    2122: 2,
+    1411: 3,
+    1132: 4,
+    1231: 5,
+    1114: 6,
+    1312: 7,
+    1213: 8,
+    3112: 9,
+  }
+
+  for width in widths:
+    number = ''.join(map(str, width)) # convert the array of digits into a single number as a string
+    number = int(number) # use a cast to convert our number string into an integer
+    for value in width_values.keys():
+      if number == value:
+        actual_values.append(width_values[value])
+      else:
+        for m in range(number, number + margin): # account for margin of error in positive direction
+          if m == value:
+            actual_values.append(width_values[value])
+            continue
+        for m in range(number - margin, number): # account for margin of error in negative direction
+          if m == value:
+            actual_values.append(width_values[value])
+            continue
+
+  return actual_values
+        
+
 # takes in a numpy array representation of an image and attempts to analyze the barcode
 def analyzeBarCode(image):
   middle = len(image) // 2
@@ -200,7 +237,7 @@ def analyzeBarCode(image):
         values.append(count)
         count = 0
 
-  #values = remove_values_from_list(values, 0)  
+  values = remove_values_from_list(values, 0)  
   common = get_four_most_common_list_values(values)
   print("common:", common)
   only_most_common = []
@@ -212,19 +249,22 @@ def analyzeBarCode(image):
   tuples = convert_widths_to_tuple(widths)
   print("tuples:", tuples)
 
+  new_values = assign_values_to_widths(tuples, 20)
+  print("new values:", new_values)
+
   return values
     
 
 #### BEGIN MAIN ####
 
 # load the barcode
-imOrig = Image.open('barcod.jpg')
+imOrig = Image.open('barcode.png')
 im = imOrig.convert('L') # convert to grayscale
 im.save("./results/original.jpg")
 
 erosionFactor = 0 # will change based on whether it is a photo or digital scan
 # if image is not a digital scan of a barcode, meaning it is probably a photo, perform some cleanup.
-if not imgIsGood(im, 50):
+if not imgIsGood(im, 100):
   print("This image seems to be a photo of a barcode, attempting to clean up and binarize.")
   im = adjustBrightness(im, -40) # increasing brightness seems to make fabrizzio's picture worse
   #im = adjustContrast(im, -100)
